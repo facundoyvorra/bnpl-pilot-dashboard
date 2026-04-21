@@ -352,7 +352,7 @@ function filter(){
 function prepost(data){return{pre:data.filter(r=>r.date<PILOT_START),post:data.filter(r=>r.date>=PILOT_START)};}
 function keys(data){return uniq(data.map(gk));}
 function groupSum(data,keyFn,field){const m={};data.forEach(r=>{const k=keyFn(r);m[k]=(m[k]||0)+(r[field]||0);});return m;}
-function dstr(d){return(ch)=>{if(CH[d]){CH[d].destroy();delete CH[d];}CH[d]=ch;return ch;};}
+function mkChart(id,cfg){const el=document.getElementById(id);const prev=Chart.getChart(el);if(prev)prev.destroy();CH[id]=new Chart(el,cfg);}
 function pilotPlugin(ks){
   const ix=gran==='day'?ks.indexOf(PILOT_START):ks.indexOf(isoWeek(PILOT_START));
   if(ix<0)return{id:'noop'};
@@ -403,8 +403,8 @@ function renderP0(){
   set('s2',fmtPct(postApp),liftPP(postApp-preApp));set('s3',fmtPct(postConv),liftPP(postConv-preConv));
   set('s4',fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL));set('s5',fmtPct(postLog),liftPP(postLog-preLog));
   const tpvByK=groupSum(data,gk,'pf_approved_amt'),flByK=groupSum(data,gk,'qty_flows'),plg=pilotPlugin(ks);
-  dstr('c0a')(new Chart(document.getElementById('c0a'),{type:'bar',data:{labels:ks,datasets:[{label:'TPV Aprobado (USD)',data:ks.map(k=>tpvByK[k]||0),backgroundColor:'rgba(0,158,227,.7)',borderColor:'#009EE3',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+v.toLocaleString()}}}},plugins:[plg]}));
-  dstr('c0b')(new Chart(document.getElementById('c0b'),{type:'bar',data:{labels:ks,datasets:[{label:'Flows',data:ks.map(k=>flByK[k]||0),backgroundColor:'rgba(255,179,0,.7)',borderColor:'#FFB300',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[plg]}));
+  mkChart('c0a',{type:'bar',data:{labels:ks,datasets:[{label:'TPV Aprobado (USD)',data:ks.map(k=>tpvByK[k]||0),backgroundColor:'rgba(0,158,227,.7)',borderColor:'#009EE3',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+v.toLocaleString()}}}},plugins:[plg]});
+  mkChart('c0b',{type:'bar',data:{labels:ks,datasets:[{label:'Flows',data:ks.map(k=>flByK[k]||0),backgroundColor:'rgba(255,179,0,.7)',borderColor:'#FFB300',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[plg]});
   document.getElementById('t0').innerHTML=buildTable(['Métrica','Pre-piloto (16/03–12/04)','Post-piloto (desde 13/04)','Lift'],[['TPV diario promedio (USD)',fmtUSD(preTPVd),fmtUSD(postTPVd),liftPct(postTPVd,preTPVd)],['Flows diarios promedio',fmtNum(preFld),fmtNum(postFld),liftPct(postFld,preFld)],['Aprobación %',fmtPct(preApp),fmtPct(postApp),liftPP(postApp-preApp)],['Conversión %',fmtPct(preConv),fmtPct(postConv),liftPP(postConv-preConv)],['% BNPL',fmtPct(preBNPL,2),fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL)],['% Logged',fmtPct(preLog),fmtPct(postLog),liftPP(postLog-preLog)]]);
 }
 
@@ -416,8 +416,8 @@ function renderP1(){
   data.forEach(r=>{const k=gk(r);r.logged_guest==='Logged'?logByK[k]+=r.qty_flows:gstByK[k]+=r.qty_flows;});
   const logPct=ks.map(k=>{const t=(logByK[k]||0)+(gstByK[k]||0);return t?+(logByK[k]/t*100).toFixed(1):0;});
   const gstPct=ks.map(k=>{const t=(logByK[k]||0)+(gstByK[k]||0);return t?+(gstByK[k]/t*100).toFixed(1):0;});
-  dstr('c1a')(new Chart(document.getElementById('c1a'),{type:'bar',data:{labels:ks,datasets:[{label:'Logged %',data:logPct,backgroundColor:'#4ECDC4',stack:'s'},{label:'Guest %',data:gstPct,backgroundColor:'#FF6B6B',stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
-  dstr('c1b')(new Chart(document.getElementById('c1b'),{type:'line',data:{labels:ks,datasets:[{label:'% Logged',data:logPct,borderColor:'#4ECDC4',backgroundColor:'rgba(78,205,196,.12)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:30,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  mkChart('c1a',{type:'bar',data:{labels:ks,datasets:[{label:'Logged %',data:logPct,backgroundColor:'#4ECDC4',stack:'s'},{label:'Guest %',data:gstPct,backgroundColor:'#FF6B6B',stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
+  mkChart('c1b',{type:'line',data:{labels:ks,datasets:[{label:'% Logged',data:logPct,borderColor:'#4ECDC4',backgroundColor:'rgba(78,205,196,.12)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:30,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
   const fn=(arr)=>sum(arr,'qty_flows')?arr.filter(r=>r.logged_guest==='Logged').reduce((s,r)=>s+r.qty_flows,0)/sum(arr,'qty_flows')*100:0;
   const preL=fn(pre),postL=fn(post);
   document.getElementById('t1').innerHTML=buildTable(['Período','Logged %','Guest %','Lift en Logged'],[['Pre-piloto (16/03–12/04)',fmtPct(preL),fmtPct(100-preL),'—'],['Post-piloto (desde 13/04)',fmtPct(postL),fmtPct(100-postL),liftPP(postL-preL)]]);
@@ -430,9 +430,9 @@ function renderP2(){
   const allPMs=uniq(data.map(r=>r.pm_type)),pmByK={};
   ks.forEach(k=>{pmByK[k]={};allPMs.forEach(pm=>pmByK[k][pm]=0);});
   data.forEach(r=>{const k=gk(r);pmByK[k][r.pm_type]=(pmByK[k][r.pm_type]||0)+r.qty_flows;});
-  dstr('c2a')(new Chart(document.getElementById('c2a'),{type:'bar',data:{labels:ks,datasets:allPMs.map(pm=>({label:pm,data:ks.map(k=>{const t=allPMs.reduce((s,p)=>s+(pmByK[k][p]||0),0);return t?+((pmByK[k][pm]||0)/t*100).toFixed(2):0;}),backgroundColor:PM_COLORS[pm]||'#B0BEC5',stack:'s'}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  mkChart('c2a',{type:'bar',data:{labels:ks,datasets:allPMs.map(pm=>({label:pm,data:ks.map(k=>{const t=allPMs.reduce((s,p)=>s+(pmByK[k][p]||0),0);return t?+((pmByK[k][pm]||0)/t*100).toFixed(2):0;}),backgroundColor:PM_COLORS[pm]||'#B0BEC5',stack:'s'}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
   const bnplPct=ks.map(k=>{const t=allPMs.reduce((s,pm)=>s+(pmByK[k][pm]||0),0);return t?((pmByK[k]['digital_currency']||0)/t*100).toFixed(2):0;});
-  dstr('c2b')(new Chart(document.getElementById('c2b'),{type:'line',data:{labels:ks,datasets:[{label:'% BNPL',data:bnplPct,borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  mkChart('c2b',{type:'line',data:{labels:ks,datasets:[{label:'% BNPL',data:bnplPct,borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
   const fn=(arr)=>sum(arr,'qty_flows')?arr.filter(r=>r.pm_type==='digital_currency').reduce((s,r)=>s+r.qty_flows,0)/sum(arr,'qty_flows')*100:0;
   const preB=fn(pre),postB=fn(post);
   document.getElementById('t2').innerHTML=buildTable(['Período','BNPL (digital_currency)','Resto de MPs','Lift en distribución'],[['Pre-piloto (16/03–12/04)',fmtPct(preB,2),fmtPct(100-preB,2),'—'],['Post-piloto (desde 13/04)',fmtPct(postB,2),fmtPct(100-postB,2),liftPP(postB-preB)]]);
@@ -443,14 +443,14 @@ function renderP3(){
   const data=filter(),{pre,post}=prepost(data),ks=keys(data),plg=pilotPlugin(ks);
   const appByK={};ks.forEach(k=>appByK[k]={inc:0,app:0});
   data.forEach(r=>{const k=gk(r);appByK[k].inc+=r.pf_incoming_amt;appByK[k].app+=r.pf_approved_amt;});
-  dstr('c3a')(new Chart(document.getElementById('c3a'),{type:'line',data:{labels:ks,datasets:[{label:'Aprobación %',data:ks.map(k=>appByK[k].inc?+(appByK[k].app/appByK[k].inc*100).toFixed(1):null),borderColor:'#009EE3',backgroundColor:'rgba(0,158,227,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  mkChart('c3a',{type:'line',data:{labels:ks,datasets:[{label:'Aprobación %',data:ks.map(k=>appByK[k].inc?+(appByK[k].app/appByK[k].inc*100).toFixed(1):null),borderColor:'#009EE3',backgroundColor:'rgba(0,158,227,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
   const convByK={};ks.forEach(k=>convByK[k]={fl:0,cg:0});
   data.forEach(r=>{const k=gk(r);convByK[k].fl+=r.qty_flows;convByK[k].cg+=r.qty_congrats;});
-  dstr('c3b')(new Chart(document.getElementById('c3b'),{type:'line',data:{labels:ks,datasets:[{label:'Conversión %',data:ks.map(k=>convByK[k].fl?+(convByK[k].cg/convByK[k].fl*100).toFixed(1):null),borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  mkChart('c3b',{type:'line',data:{labels:ks,datasets:[{label:'Conversión %',data:ks.map(k=>convByK[k].fl?+(convByK[k].cg/convByK[k].fl*100).toFixed(1):null),borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]});
   const allFFs=uniq(data.map(r=>r.finish_flow)),ffByK={};
   ks.forEach(k=>{ffByK[k]={};allFFs.forEach(ff=>ffByK[k][ff]=0);});
   data.forEach(r=>{const k=gk(r);ffByK[k][r.finish_flow]=(ffByK[k][r.finish_flow]||0)+r.qty_flows;});
-  dstr('c3c')(new Chart(document.getElementById('c3c'),{type:'line',data:{labels:ks,datasets:allFFs.map(ff=>({label:ff,data:ks.map(k=>ffByK[k][ff]||0),borderColor:FF_COLORS[ff]||'#B0BEC5',backgroundColor:(FF_COLORS[ff]||'#B0BEC5')+'33',fill:true,tension:.3,pointRadius:2}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{stacked:true,beginAtZero:true}}},plugins:[plg]}));
+  mkChart('c3c',{type:'line',data:{labels:ks,datasets:allFFs.map(ff=>({label:ff,data:ks.map(k=>ffByK[k][ff]||0),borderColor:FF_COLORS[ff]||'#B0BEC5',backgroundColor:(FF_COLORS[ff]||'#B0BEC5')+'33',fill:true,tension:.3,pointRadius:2}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{stacked:true,beginAtZero:true}}},plugins:[plg]});
   const preApp=sum(pre,'pf_incoming_amt')?sum(pre,'pf_approved_amt')/sum(pre,'pf_incoming_amt')*100:0;
   const postApp=sum(post,'pf_incoming_amt')?sum(post,'pf_approved_amt')/sum(post,'pf_incoming_amt')*100:0;
   const preConv=sum(pre,'qty_flows')?sum(pre,'qty_congrats')/sum(pre,'qty_flows')*100:0;
