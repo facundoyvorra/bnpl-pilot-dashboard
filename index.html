@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BNPL Free Financing — Pilot Brazil</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="bq_data.js"></script>
+  <style>
+    :root {
+      --mp-blue: #009EE3;
+      --mp-yellow: #FFE600;
+      --mp-dark: #1A1A2E;
+      --mp-green: #00A650;
+      --mp-red: #F23D4F;
+      --bg: #F0F2F5;
+      --card: #FFFFFF;
+      --text: #1A1A2E;
+      --muted: #6B7280;
+      --border: #E5E7EB;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+    /* AUTH OVERLAY */
+    #auth-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--mp-dark);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #auth-box {
+      background: #fff; border-radius: 16px; padding: 48px 40px;
+      text-align: center; width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    }
+    #auth-box .logo { font-size: 40px; margin-bottom: 8px; }
+    #auth-box h2 { font-size: 18px; font-weight: 700; color: var(--mp-dark); margin-bottom: 6px; }
+    #auth-box p  { font-size: 13px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+    #auth-box .domain-badge {
+      display: inline-block; background: #EEF2FF; color: #4F46E5;
+      border-radius: 20px; padding: 4px 14px; font-size: 12px;
+      font-weight: 600; margin-bottom: 28px;
+    }
+    #auth-error {
+      display: none; margin-top: 16px; padding: 10px 14px;
+      background: #FEF2F2; border-radius: 8px;
+      color: var(--mp-red); font-size: 12px; font-weight: 600;
+    }
+    .g_id_signin { display: flex; justify-content: center; }
+
+    .header { background: var(--mp-dark); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
+    .header .sub { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+    .badge { background: var(--mp-yellow); color: var(--mp-dark); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .last-updated { font-size: 11px; color: #9CA3AF; margin-top: 4px; text-align: right; }
+    .user-info { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
+
+    .filters { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 28px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+    .fg { display: flex; align-items: flex-start; gap: 6px; }
+    .fg > label { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; padding-top: 6px; }
+    .fg select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; outline: none; background: #fff; }
+    .fg select:focus { border-color: var(--mp-blue); }
+    .fg select[multiple] { padding: 3px; min-width: 155px; }
+    .hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .toggle { display: flex; border: 1.5px solid var(--mp-blue); border-radius: 6px; overflow: hidden; margin-left: auto; align-self: center; }
+    .tbtn { padding: 5px 16px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; background: #fff; color: var(--mp-blue); }
+    .tbtn.on { background: var(--mp-blue); color: #fff; }
+
+    .tabs { background: #fff; border-bottom: 2px solid var(--border); display: flex; padding: 0 28px; overflow-x: auto; }
+    .tab { padding: 11px 18px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color .15s; }
+    .tab.on { color: var(--mp-blue); border-color: var(--mp-blue); }
+    .tab:hover { color: var(--mp-blue); }
+
+    .page { display: none; padding: 24px 28px; }
+    .page.on { display: block; }
+
+    .scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .score { background: var(--card); border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .score .lbl { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .score .val { font-size: 26px; font-weight: 700; color: var(--mp-dark); line-height: 1; }
+    .score .lift { font-size: 12px; margin-top: 5px; font-weight: 600; }
+    .up { color: var(--mp-green); }
+    .dn { color: var(--mp-red); }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+    .full { grid-column: 1 / -1; }
+    .card { background: var(--card); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .card h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+    .card h3 .note { font-size: 11px; color: var(--muted); font-weight: 400; }
+    .ch { position: relative; height: 270px; }
+    .ch-tall { position: relative; height: 310px; }
+    .mb18 { margin-bottom: 18px; }
+
+    .ctable-wrap { background: var(--card); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .ctable-wrap h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--mp-dark); }
+    .ctable { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ctable th { background: #F9FAFB; padding: 9px 14px; text-align: center; font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 2px solid var(--border); }
+    .ctable th:first-child { text-align: left; }
+    .ctable td { padding: 10px 14px; text-align: center; border-bottom: 1px solid var(--border); }
+    .ctable td:first-child { text-align: left; font-weight: 500; }
+    .ctable .pre td { color: var(--muted); }
+    .ctable .post td { color: var(--mp-blue); font-weight: 700; font-size: 14px; }
+    .ctable .lift-pos { background: #ECFDF5; color: var(--mp-green); font-weight: 800; font-size: 14px; }
+    .ctable .lift-neg { background: #FEF2F2; color: var(--mp-red); font-weight: 800; font-size: 14px; }
+    .ctable .lift-neu { color: var(--muted); }
+
+    @media (max-width: 768px) {
+      .grid2 { grid-template-columns: 1fr; }
+      .full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div id="auth-box">
+    <div class="logo">🔒</div>
+    <h2>BNPL Pilot Dashboard</h2>
+    <p>Acceso restringido al equipo de<br>Mercado Pago / Mercado Libre</p>
+    <div class="domain-badge">@mercadolibre.com</div>
+    <div id="g_id_onload"
+         data-client_id="PENDING_CLIENT_ID"
+         data-callback="handleGoogleCredential"
+         data-auto_prompt="true"
+         data-context="signin">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-shape="rectangular"
+         data-theme="outline"
+         data-text="signin_with"
+         data-size="large"
+         data-locale="es">
+    </div>
+    <div id="auth-error">Acceso denegado. Solo cuentas @mercadolibre.com</div>
+  </div>
+</div>
+
+<!-- DASHBOARD (oculto hasta auth) -->
+<div id="app" style="display:none">
+
+<div class="header">
+  <div>
+    <h1>🇧🇷 BNPL Free Financing — Pilot Tracking Brazil</h1>
+    <div class="sub">5 sellers | Seguimiento desde 16/03/2026 | Pre-piloto: 16/03–12/04 | Post-piloto: desde 13/04</div>
+  </div>
+  <div style="text-align:right">
+    <div class="badge">PILOTO ACTIVO desde 13/04/2026</div>
+    <div class="last-updated" id="last-updated">Datos: —</div>
+    <div class="user-info" id="user-info"></div>
+  </div>
+</div>
+
+<div class="filters">
+  <div class="fg">
+    <label>Sellers</label>
+    <div>
+      <select id="fSeller" multiple size="6">
+        <option value="all" selected>Todos los sellers</option>
+        <option value="189499394">189499394</option>
+        <option value="1275421774">1275421774</option>
+        <option value="137731870">137731870</option>
+        <option value="99467373">99467373</option>
+        <option value="434342240">434342240</option>
+      </select>
+      <div class="hint">Click para toggle · múltiple sin Ctrl</div>
+    </div>
+  </div>
+  <div class="fg" style="align-self:center">
+    <label style="padding-top:0">Device</label>
+    <select id="fDevice" onchange="refresh()">
+      <option value="all">Todos</option>
+      <option value="Mobile">Mobile</option>
+      <option value="Desktop">Desktop</option>
+      <option value="App">App</option>
+    </select>
+  </div>
+  <div class="toggle">
+    <button class="tbtn on" id="btnD" onclick="setGran('day')">Día</button>
+    <button class="tbtn" id="btnW" onclick="setGran('week')">Semana</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="goTab(0)">📊 Executive Summary</div>
+  <div class="tab" onclick="goTab(1)">👤 Logged vs Guest</div>
+  <div class="tab" onclick="goTab(2)">💳 BNPL / Digital Currency</div>
+  <div class="tab" onclick="goTab(3)">✅ Aprobación &amp; Conversión</div>
+</div>
+
+<!-- PAGE 0 -->
+<div class="page on" id="pg0">
+  <div class="scores">
+    <div class="score"><div class="lbl">TPV Aprobado diario (post)</div><div class="val" id="s0"></div><div class="lift" id="s0l"></div></div>
+    <div class="score"><div class="lbl">Flows diarios (post)</div><div class="val" id="s1"></div><div class="lift" id="s1l"></div></div>
+    <div class="score"><div class="lbl">Aprobación % (post)</div><div class="val" id="s2"></div><div class="lift" id="s2l"></div></div>
+    <div class="score"><div class="lbl">Conversión % (post)</div><div class="val" id="s3"></div><div class="lift" id="s3l"></div></div>
+    <div class="score"><div class="lbl">% BNPL (post)</div><div class="val" id="s4"></div><div class="lift" id="s4l"></div></div>
+    <div class="score"><div class="lbl">% Logged (post)</div><div class="val" id="s5"></div><div class="lift" id="s5l"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>TPV Aprobado <span class="note">— línea roja = inicio piloto 13/04</span></h3><div class="ch"><canvas id="c0a"></canvas></div></div>
+    <div class="card"><h3>Cantidad de Flows</h3><div class="ch"><canvas id="c0b"></canvas></div></div>
+  </div>
+  <div class="ctable-wrap"><h3>📋 Comparación Pre vs Post Piloto — Resumen</h3><table class="ctable" id="t0"></table></div>
+</div>
+
+<!-- PAGE 1 -->
+<div class="page" id="pg1">
+  <div class="grid2">
+    <div class="card"><h3>Logged vs Guest — distribución % (100% apilado)</h3><div class="ch"><canvas id="c1a"></canvas></div></div>
+    <div class="card"><h3>% Logged — Tendencia</h3><div class="ch"><canvas id="c1b"></canvas></div></div>
+  </div>
+  <div class="ctable-wrap"><h3>📋 Comparación Pre vs Post Piloto — Logged / Guest</h3><table class="ctable" id="t1"></table></div>
+</div>
+
+<!-- PAGE 2 -->
+<div class="page" id="pg2">
+  <div class="card mb18"><h3>Distribución de Medios de Pago — % (100% apilado) <span class="note" id="bnplGranLbl">por Día</span></h3><div class="ch-tall"><canvas id="c2a"></canvas></div></div>
+  <div class="card mb18"><h3>% BNPL (digital_currency) — Tendencia</h3><div class="ch"><canvas id="c2b"></canvas></div></div>
+  <div class="ctable-wrap"><h3>📋 Comparación Pre vs Post Piloto — BNPL</h3><table class="ctable" id="t2"></table></div>
+</div>
+
+<!-- PAGE 3 -->
+<div class="page" id="pg3">
+  <div class="grid2">
+    <div class="card"><h3>Tasa de Aprobación <span class="note">PF_APPROVED_AMT / PF_INCOMING_AMT</span></h3><div class="ch"><canvas id="c3a"></canvas></div></div>
+    <div class="card"><h3>Tasa de Conversión <span class="note">QTY_CONGRATS / QTY_FLOWS</span></h3><div class="ch"><canvas id="c3b"></canvas></div></div>
+    <div class="card full"><h3>Distribución Finish Flow (área apilada)</h3><div class="ch-tall"><canvas id="c3c"></canvas></div></div>
+  </div>
+  <div class="ctable-wrap"><h3>📋 Comparación Pre vs Post Piloto — Aprobación &amp; Conversión</h3><table class="ctable" id="t3"></table></div>
+</div>
+
+</div><!-- /#app -->
+
+<script>
+// ── AUTH ──────────────────────────────────────────────────────────
+function parseJwt(token) {
+  const b64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+  return JSON.parse(decodeURIComponent(atob(b64).split('').map(c=>
+    '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+}
+
+function handleGoogleCredential(response) {
+  const payload = parseJwt(response.credential);
+  const domain  = (payload.email || '').split('@')[1];
+  if (domain === 'mercadolibre.com' || domain === 'mercadopago.com') {
+    sessionStorage.setItem('auth_email', payload.email);
+    sessionStorage.setItem('auth_name',  payload.name || payload.email);
+    showDashboard(payload.email, payload.name);
+  } else {
+    document.getElementById('auth-error').style.display = 'block';
+  }
+}
+
+function showDashboard(email, name) {
+  document.getElementById('auth-overlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-info').textContent = name || email;
+  initDashboard();
+}
+
+// Check existing session on load
+window.addEventListener('load', () => {
+  const email = sessionStorage.getItem('auth_email');
+  const name  = sessionStorage.getItem('auth_name');
+  if (email) showDashboard(email, name);
+});
+
+// ── CONSTANTS ─────────────────────────────────────────────────────
+const PILOT_START = "2026-04-13";
+const SELLERS     = ["189499394","1275421774","137731870","99467373","434342240"];
+const PM_COLORS   = { "digital_currency":"#00A650","credit_card":"#009EE3","debit_card":"#67E8F9","pix":"#9333EA","boleto":"#F59E0B","account_money":"#94A3B8" };
+const FF_COLORS   = { "Success":"#00A650","Login":"#009EE3","PM Selection":"#F59E0B","Input Card":"#F4511E","Confirm Payment":"#9333EA","Bounce":"#94A3B8","Error":"#F23D4F","OTHER":"#CBD5E1" };
+
+function rand(seed) { let x=Math.sin(seed)*10000; return x-Math.floor(x); }
+function seeded(date,seller,pm,ff,field) {
+  const s=(date+seller+pm+ff+field).split('').reduce((a,c)=>a+c.charCodeAt(0),0);
+  return rand(s);
+}
+function makeDates(from,to) {
+  const out=[],d=new Date(from),e=new Date(to);
+  while(d<=e){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}
+  return out;
+}
+function isoWeek(ds) {
+  const d=new Date(ds),tmp=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=tmp.getUTCDay()||7;tmp.setUTCDate(tmp.getUTCDate()+4-day);
+  const y=tmp.getUTCFullYear(),jan1=new Date(Date.UTC(y,0,1));
+  return `${y}-W${String(Math.ceil(((tmp-jan1)/86400000+1)/7)).padStart(2,'0')}`;
+}
+
+function generateData() {
+  const rows=[],dates=makeDates("2026-03-16","2026-04-21");
+  const pms=["credit_card","debit_card","pix","boleto","account_money","digital_currency"];
+  const ffs=["Success","Login","PM Selection","Input Card","Confirm Payment","Bounce","Error"];
+  const devs=["Mobile","Desktop","App"];
+  dates.forEach(date=>{
+    const post=date>=PILOT_START;
+    const bnplSh=post?0.021:0.006,loggedSh=post?0.62:0.55;
+    const appRate=post?0.792:0.762,convRate=post?0.671:0.641;
+    const pmSh={"credit_card":post?0.478:0.498,"debit_card":post?0.191:0.199,"pix":post?0.152:0.154,"boleto":post?0.112:0.115,"digital_currency":bnplSh,"account_money":0};
+    pmSh["account_money"]=Math.max(0,1-Object.values(pmSh).reduce((a,b)=>a+b,0));
+    const ffSh={"Success":convRate,"Login":0.14,"PM Selection":0.08,"Input Card":0.06,"Confirm Payment":0.03,"Bounce":0.015,"Error":Math.max(0,1-convRate-0.14-0.08-0.06-0.03-0.015)};
+    const dw=new Date(date).getDay(),baseF=(dw===0||dw===6)?55:110;
+    const avgT={"digital_currency":185,"credit_card":125,"debit_card":90,"pix":80,"boleto":70,"account_money":60};
+    SELLERS.forEach(sel=>{
+      const n=seeded(date,sel,'','','noise');
+      const selFlows=Math.round((baseF/SELLERS.length)*(0.75+n*0.5));
+      ["Logged","Guest"].forEach(lg=>{
+        const lgFlows=Math.round(selFlows*(lg==="Logged"?loggedSh:1-loggedSh));
+        pms.forEach(pm=>{
+          const pmFlows=Math.round(lgFlows*pmSh[pm]);
+          if(pmFlows<1)return;
+          ffs.forEach(ff=>{
+            const ffFlows=Math.round(pmFlows*ffSh[ff]);
+            if(ffFlows<1)return;
+            const inc=ffFlows*avgT[pm]*(0.9+seeded(date,sel,pm,ff,'t')*0.2);
+            const appr=inc*(ff==="Success"?(appRate+0.08):appRate*0.15);
+            rows.push({date,week:isoWeek(date),seller:sel,logged_guest:lg,pm_type:pm,finish_flow:ff,
+              device:devs[Math.floor(seeded(date,sel,pm,ff,'d')*3)],
+              qty_flows:ffFlows,qty_congrats:ff==="Success"?ffFlows:0,
+              pf_incoming_amt:Math.round(inc),pf_approved_amt:Math.round(appr),
+              pf_incoming_qty:ffFlows,pf_approved_qty:ff==="Success"?Math.round(ffFlows*appRate):0});
+          });
+        });
+      });
+    });
+  });
+  return rows;
+}
+
+let RAW=null,gran='day',curTab=0;
+const CH={};
+
+function initDashboard() {
+  RAW = window.BQ_DATA ? window.BQ_DATA : generateData();
+  document.getElementById('last-updated').textContent =
+    window.BQ_DATA ? `Datos BQ: ${window.BQ_UPDATED||'—'}` : 'Datos: Mock (pendiente primera corrida)';
+  document.getElementById('fSeller').addEventListener('mousedown',function(e){
+    if(e.target.tagName!=='OPTION')return;
+    e.preventDefault();
+    const opt=e.target,allOpt=this.querySelector('option[value="all"]');
+    const specOpts=Array.from(this.querySelectorAll('option:not([value="all"])'));
+    if(opt.value==='all'){specOpts.forEach(o=>o.selected=false);allOpt.selected=true;}
+    else{allOpt.selected=false;opt.selected=!opt.selected;if(!specOpts.some(o=>o.selected))allOpt.selected=true;}
+    refresh();
+  });
+  renderP0();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function gk(r){return gran==='day'?r.date:r.week;}
+function sum(arr,f){return arr.reduce((s,r)=>s+(r[f]||0),0);}
+function uniq(arr){return[...new Set(arr)].sort();}
+function filter(){
+  const selEl=document.getElementById('fSeller');
+  const selVals=Array.from(selEl.selectedOptions).map(o=>o.value);
+  const dev=document.getElementById('fDevice').value;
+  const showAll=selVals.length===0||selVals.includes('all');
+  return RAW.filter(r=>(showAll||selVals.includes(r.seller))&&(dev==='all'||r.device===dev));
+}
+function prepost(data){return{pre:data.filter(r=>r.date<PILOT_START),post:data.filter(r=>r.date>=PILOT_START)};}
+function keys(data){return uniq(data.map(gk));}
+function groupSum(data,keyFn,field){const m={};data.forEach(r=>{const k=keyFn(r);m[k]=(m[k]||0)+(r[field]||0);});return m;}
+function dstr(d){return(ch)=>{if(CH[d]){CH[d].destroy();delete CH[d];}CH[d]=ch;return ch;};}
+function pilotPlugin(ks){
+  const ix=gran==='day'?ks.indexOf(PILOT_START):ks.indexOf(isoWeek(PILOT_START));
+  if(ix<0)return{id:'noop'};
+  return{id:'pilotLine',afterDraw(chart){
+    const{ctx,scales:{x,y}}=chart;if(!x||!y)return;
+    const px=x.getPixelForValue(ix);
+    ctx.save();ctx.beginPath();ctx.setLineDash([5,3]);
+    ctx.strokeStyle='#F23D4F';ctx.lineWidth=2;
+    ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);
+    ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#F23D4F';ctx.font='bold 11px Segoe UI';
+    ctx.fillText('Inicio piloto',px+4,y.top+14);ctx.restore();
+  }};
+}
+function fmtPct(n,d=1){return n.toFixed(d)+'%';}
+function fmtUSD(n){return'$'+Math.round(n).toLocaleString('es-AR');}
+function fmtNum(n){return Math.round(n).toLocaleString('es-AR');}
+function liftPP(v){if(isNaN(v)||v===null)return{html:'—',cls:'lift-neu'};const s=v>=0?'▲ +':'▼ ';return{html:s+Math.abs(v).toFixed(1)+' pp',cls:v>=0?'lift-pos':'lift-neg'};}
+function liftPct(post,pre){if(!pre)return{html:'—',cls:'lift-neu'};const v=(post-pre)/pre*100,s=v>=0?'▲ +':'▼ ';return{html:s+Math.abs(v).toFixed(1)+'%',cls:v>=0?'lift-pos':'lift-neg'};}
+function scoreHTML(val,liftObj){const cls=liftObj.cls==='lift-pos'?'up':liftObj.cls==='lift-neg'?'dn':'';return`<span class="${cls}">${liftObj.html} vs pre-piloto</span>`;}
+function buildTable(headers,rows){
+  const ths=headers.map(h=>`<th>${h}</th>`).join('');
+  const trs=rows.map((row,ri)=>{
+    const cls=ri===0?'pre':'post';
+    const tds=row.map(cell=>typeof cell==='object'&&cell!==null?`<td class="${cell.cls}">${cell.html}</td>`:`<td>${cell}</td>`).join('');
+    return`<tr class="${cls}">${tds}</tr>`;
+  }).join('');
+  return`<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody>`;
+}
+
+// ── PAGE 0 ────────────────────────────────────────────────────────
+function renderP0(){
+  const data=filter(),{pre,post}=prepost(data),ks=keys(data);
+  const preDays=uniq(pre.map(r=>r.date)).length||1,postDays=uniq(post.map(r=>r.date)).length||1;
+  const preWks=uniq(pre.map(r=>r.week)).length||1,postWks=uniq(post.map(r=>r.week)).length||1;
+  const preTPVd=sum(pre,'pf_approved_amt')/preDays,postTPVd=sum(post,'pf_approved_amt')/postDays;
+  const preFld=sum(pre,'qty_flows')/preDays,postFld=sum(post,'qty_flows')/postDays;
+  const preApp=sum(pre,'pf_incoming_amt')?sum(pre,'pf_approved_amt')/sum(pre,'pf_incoming_amt')*100:0;
+  const postApp=sum(post,'pf_incoming_amt')?sum(post,'pf_approved_amt')/sum(post,'pf_incoming_amt')*100:0;
+  const preConv=sum(pre,'qty_flows')?sum(pre,'qty_congrats')/sum(pre,'qty_flows')*100:0;
+  const postConv=sum(post,'qty_flows')?sum(post,'qty_congrats')/sum(post,'qty_flows')*100:0;
+  const preBNPL=sum(pre,'qty_flows')?pre.filter(r=>r.pm_type==='digital_currency').reduce((s,r)=>s+r.qty_flows,0)/sum(pre,'qty_flows')*100:0;
+  const postBNPL=sum(post,'qty_flows')?post.filter(r=>r.pm_type==='digital_currency').reduce((s,r)=>s+r.qty_flows,0)/sum(post,'qty_flows')*100:0;
+  const preLog=sum(pre,'qty_flows')?pre.filter(r=>r.logged_guest==='Logged').reduce((s,r)=>s+r.qty_flows,0)/sum(pre,'qty_flows')*100:0;
+  const postLog=sum(post,'qty_flows')?post.filter(r=>r.logged_guest==='Logged').reduce((s,r)=>s+r.qty_flows,0)/sum(post,'qty_flows')*100:0;
+  const set=(id,val,lObj)=>{document.getElementById(id).textContent=val;document.getElementById(id+'l').innerHTML=scoreHTML(val,lObj);};
+  set('s0',fmtUSD(postTPVd),liftPct(postTPVd,preTPVd));set('s1',fmtNum(postFld),liftPct(postFld,preFld));
+  set('s2',fmtPct(postApp),liftPP(postApp-preApp));set('s3',fmtPct(postConv),liftPP(postConv-preConv));
+  set('s4',fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL));set('s5',fmtPct(postLog),liftPP(postLog-preLog));
+  const tpvByK=groupSum(data,gk,'pf_approved_amt'),flByK=groupSum(data,gk,'qty_flows'),plg=pilotPlugin(ks);
+  dstr('c0a')(new Chart(document.getElementById('c0a'),{type:'bar',data:{labels:ks,datasets:[{label:'TPV Aprobado (USD)',data:ks.map(k=>tpvByK[k]||0),backgroundColor:'rgba(0,158,227,.7)',borderColor:'#009EE3',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+v.toLocaleString()}}}},plugins:[plg]}));
+  dstr('c0b')(new Chart(document.getElementById('c0b'),{type:'bar',data:{labels:ks,datasets:[{label:'Flows',data:ks.map(k=>flByK[k]||0),backgroundColor:'rgba(255,179,0,.7)',borderColor:'#FFB300',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[plg]}));
+  const preTPVw=sum(pre,'pf_approved_amt')/preWks,postTPVw=sum(post,'pf_approved_amt')/postWks;
+  const preFlw=sum(pre,'qty_flows')/preWks,postFlw=sum(post,'qty_flows')/postWks;
+  document.getElementById('t0').innerHTML=buildTable(['Métrica','Pre-piloto (16/03–12/04)','Post-piloto (desde 13/04)','Lift'],[['TPV diario promedio (USD)',fmtUSD(preTPVd),fmtUSD(postTPVd),liftPct(postTPVd,preTPVd)],['TPV semanal promedio (USD)',fmtUSD(preTPVw),fmtUSD(postTPVw),liftPct(postTPVw,preTPVw)],['Flows diarios promedio',fmtNum(preFld),fmtNum(postFld),liftPct(postFld,preFld)],['Flows semanales promedio',fmtNum(preFlw),fmtNum(postFlw),liftPct(postFlw,preFlw)],['Aprobación %',fmtPct(preApp),fmtPct(postApp),liftPP(postApp-preApp)],['Conversión %',fmtPct(preConv),fmtPct(postConv),liftPP(postConv-preConv)],['% BNPL',fmtPct(preBNPL,2),fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL)],['% Logged',fmtPct(preLog),fmtPct(postLog),liftPP(postLog-preLog)]]);
+}
+
+// ── PAGE 1 ────────────────────────────────────────────────────────
+function renderP1(){
+  const data=filter(),{pre,post}=prepost(data),ks=keys(data),plg=pilotPlugin(ks);
+  const logByK={},gstByK={};
+  ks.forEach(k=>{logByK[k]=0;gstByK[k]=0;});
+  data.forEach(r=>{const k=gk(r);r.logged_guest==='Logged'?logByK[k]+=r.qty_flows:gstByK[k]+=r.qty_flows;});
+  const logPct=ks.map(k=>{const t=(logByK[k]||0)+(gstByK[k]||0);return t?+(logByK[k]/t*100).toFixed(1):0;});
+  const gstPct=ks.map(k=>{const t=(logByK[k]||0)+(gstByK[k]||0);return t?+(gstByK[k]/t*100).toFixed(1):0;});
+  dstr('c1a')(new Chart(document.getElementById('c1a'),{type:'bar',data:{labels:ks,datasets:[{label:'Logged %',data:logPct,backgroundColor:'#4ECDC4',stack:'s'},{label:'Guest %',data:gstPct,backgroundColor:'#FF6B6B',stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  dstr('c1b')(new Chart(document.getElementById('c1b'),{type:'line',data:{labels:ks,datasets:[{label:'% Logged',data:logPct,borderColor:'#4ECDC4',backgroundColor:'rgba(78,205,196,.12)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:30,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  const fn=(arr)=>sum(arr,'qty_flows')?arr.filter(r=>r.logged_guest==='Logged').reduce((s,r)=>s+r.qty_flows,0)/sum(arr,'qty_flows')*100:0;
+  const preL=fn(pre),postL=fn(post);
+  document.getElementById('t1').innerHTML=buildTable(['Período','Logged %','Guest %','Lift en Logged'],[['Pre-piloto (16/03–12/04)',fmtPct(preL),fmtPct(100-preL),'—'],['Post-piloto (desde 13/04)',fmtPct(postL),fmtPct(100-postL),liftPP(postL-preL)]]);
+}
+
+// ── PAGE 2 ────────────────────────────────────────────────────────
+function renderP2(){
+  const data=filter(),{pre,post}=prepost(data),ks=keys(data),plg=pilotPlugin(ks);
+  document.getElementById('bnplGranLbl').textContent=gran==='day'?'por Día':'por Semana';
+  const allPMs=uniq(data.map(r=>r.pm_type)),pmByK={};
+  ks.forEach(k=>{pmByK[k]={};allPMs.forEach(pm=>pmByK[k][pm]=0);});
+  data.forEach(r=>{const k=gk(r);pmByK[k][r.pm_type]=(pmByK[k][r.pm_type]||0)+r.qty_flows;});
+  dstr('c2a')(new Chart(document.getElementById('c2a'),{type:'bar',data:{labels:ks,datasets:allPMs.map(pm=>({label:pm,data:ks.map(k=>{const t=allPMs.reduce((s,p)=>s+(pmByK[k][p]||0),0);return t?+((pmByK[k][pm]||0)/t*100).toFixed(2):0;}),backgroundColor:PM_COLORS[pm]||'#B0BEC5',stack:'s'}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  const bnplPct=ks.map(k=>{const t=allPMs.reduce((s,pm)=>s+(pmByK[k][pm]||0),0);return t?((pmByK[k]['digital_currency']||0)/t*100).toFixed(2):0;});
+  dstr('c2b')(new Chart(document.getElementById('c2b'),{type:'line',data:{labels:ks,datasets:[{label:'% BNPL',data:bnplPct,borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  const fn=(arr)=>sum(arr,'qty_flows')?arr.filter(r=>r.pm_type==='digital_currency').reduce((s,r)=>s+r.qty_flows,0)/sum(arr,'qty_flows')*100:0;
+  const preB=fn(pre),postB=fn(post);
+  document.getElementById('t2').innerHTML=buildTable(['Período','BNPL (digital_currency)','Resto de MPs','Lift en distribución'],[['Pre-piloto (16/03–12/04)',fmtPct(preB,2),fmtPct(100-preB,2),'—'],['Post-piloto (desde 13/04)',fmtPct(postB,2),fmtPct(100-postB,2),liftPP(postB-preB)]]);
+}
+
+// ── PAGE 3 ────────────────────────────────────────────────────────
+function renderP3(){
+  const data=filter(),{pre,post}=prepost(data),ks=keys(data),plg=pilotPlugin(ks);
+  const appByK={};ks.forEach(k=>appByK[k]={inc:0,app:0});
+  data.forEach(r=>{const k=gk(r);appByK[k].inc+=r.pf_incoming_amt;appByK[k].app+=r.pf_approved_amt;});
+  dstr('c3a')(new Chart(document.getElementById('c3a'),{type:'line',data:{labels:ks,datasets:[{label:'Aprobación %',data:ks.map(k=>appByK[k].inc?(appByK[k].app/appByK[k].inc*100).toFixed(1):null),borderColor:'#009EE3',backgroundColor:'rgba(0,158,227,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  const convByK={};ks.forEach(k=>convByK[k]={fl:0,cg:0});
+  data.forEach(r=>{const k=gk(r);convByK[k].fl+=r.qty_flows;convByK[k].cg+=r.qty_congrats;});
+  dstr('c3b')(new Chart(document.getElementById('c3b'),{type:'line',data:{labels:ks,datasets:[{label:'Conversión %',data:ks.map(k=>convByK[k].fl?(convByK[k].cg/convByK[k].fl*100).toFixed(1):null),borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  const allFFs=uniq(data.map(r=>r.finish_flow)),ffByK={};
+  ks.forEach(k=>{ffByK[k]={};allFFs.forEach(ff=>ffByK[k][ff]=0);});
+  data.forEach(r=>{const k=gk(r);ffByK[k][r.finish_flow]=(ffByK[k][r.finish_flow]||0)+r.qty_flows;});
+  dstr('c3c')(new Chart(document.getElementById('c3c'),{type:'line',data:{labels:ks,datasets:allFFs.map(ff=>({label:ff,data:ks.map(k=>ffByK[k][ff]||0),borderColor:FF_COLORS[ff]||'#B0BEC5',backgroundColor:(FF_COLORS[ff]||'#B0BEC5')+'33',fill:true,tension:.3,pointRadius:2}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{stacked:true,beginAtZero:true}}},plugins:[plg]}));
+  const preApp=sum(pre,'pf_incoming_amt')?sum(pre,'pf_approved_amt')/sum(pre,'pf_incoming_amt')*100:0;
+  const postApp=sum(post,'pf_incoming_amt')?sum(post,'pf_approved_amt')/sum(post,'pf_incoming_amt')*100:0;
+  const preConv=sum(pre,'qty_flows')?sum(pre,'qty_congrats')/sum(pre,'qty_flows')*100:0;
+  const postConv=sum(post,'qty_flows')?sum(post,'qty_congrats')/sum(post,'qty_flows')*100:0;
+  document.getElementById('t3').innerHTML=buildTable(['Período','Aprobación %','Conversión %','Lift Aprobación','Lift Conversión'],[['Pre-piloto (16/03–12/04)',fmtPct(preApp),fmtPct(preConv),'—','—'],['Post-piloto (desde 13/04)',fmtPct(postApp),fmtPct(postConv),liftPP(postApp-preApp),liftPP(postConv-preConv)]]);
+}
+
+// ── NAV ───────────────────────────────────────────────────────────
+function goTab(i){document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('on',i===j));document.querySelectorAll('.page').forEach((p,j)=>p.classList.toggle('on',i===j));curTab=i;render();}
+function setGran(g){gran=g;document.getElementById('btnD').classList.toggle('on',g==='day');document.getElementById('btnW').classList.toggle('on',g==='week');render();}
+function refresh(){render();}
+function render(){if(curTab===0)renderP0();else if(curTab===1)renderP1();else if(curTab===2)renderP2();else if(curTab===3)renderP3();}
+</script>
+</body>
+</html>
