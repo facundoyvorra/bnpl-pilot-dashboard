@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BNPL Free Financing — Pilot Brazil</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="bq_data.js"></script>
   <style>
@@ -37,17 +36,22 @@
     #auth-box .logo { font-size: 40px; margin-bottom: 8px; }
     #auth-box h2 { font-size: 18px; font-weight: 700; color: var(--mp-dark); margin-bottom: 6px; }
     #auth-box p  { font-size: 13px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
-    #auth-box .domain-badge {
-      display: inline-block; background: #EEF2FF; color: #4F46E5;
-      border-radius: 20px; padding: 4px 14px; font-size: 12px;
-      font-weight: 600; margin-bottom: 28px;
+    #auth-box input[type="password"] {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 12px;
     }
+    #auth-box input[type="password"]:focus { border-color: var(--mp-blue); }
+    #auth-box button {
+      width: 100%; padding: 11px; background: var(--mp-blue); color: #fff;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer;
+    }
+    #auth-box button:hover { background: #007bb5; }
     #auth-error {
-      display: none; margin-top: 16px; padding: 10px 14px;
+      display: none; margin-top: 12px; padding: 10px 14px;
       background: #FEF2F2; border-radius: 8px;
       color: var(--mp-red); font-size: 12px; font-weight: 600;
     }
-    .g_id_signin { display: flex; justify-content: center; }
 
     .header { background: var(--mp-dark); color: #fff; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
     .header h1 { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
@@ -118,23 +122,11 @@
   <div id="auth-box">
     <div class="logo">🔒</div>
     <h2>BNPL Pilot Dashboard</h2>
-    <p>Acceso restringido al equipo de<br>Mercado Pago / Mercado Libre</p>
-    <div class="domain-badge">@mercadolibre.com</div>
-    <div id="g_id_onload"
-         data-client_id="PENDING_CLIENT_ID"
-         data-callback="handleGoogleCredential"
-         data-auto_prompt="true"
-         data-context="signin">
-    </div>
-    <div class="g_id_signin"
-         data-type="standard"
-         data-shape="rectangular"
-         data-theme="outline"
-         data-text="signin_with"
-         data-size="large"
-         data-locale="es">
-    </div>
-    <div id="auth-error">Acceso denegado. Solo cuentas @mercadolibre.com</div>
+    <p>Ingresá la contraseña para acceder</p>
+    <input type="password" id="password-input" placeholder="Contraseña"
+           onkeydown="if(event.key==='Enter') checkPassword()">
+    <button onclick="checkPassword()">Ingresar</button>
+    <div id="auth-error">Contraseña incorrecta</div>
   </div>
 </div>
 
@@ -237,36 +229,27 @@
 
 <script>
 // ── AUTH ──────────────────────────────────────────────────────────
-function parseJwt(token) {
-  const b64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-  return JSON.parse(decodeURIComponent(atob(b64).split('').map(c=>
-    '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')));
-}
-
-function handleGoogleCredential(response) {
-  const payload = parseJwt(response.credential);
-  const domain  = (payload.email || '').split('@')[1];
-  if (domain === 'mercadolibre.com' || domain === 'mercadopago.com') {
-    sessionStorage.setItem('auth_email', payload.email);
-    sessionStorage.setItem('auth_name',  payload.name || payload.email);
-    showDashboard(payload.email, payload.name);
+function checkPassword() {
+  const input = document.getElementById('password-input').value;
+  if (input === 'Meradolibre2464!') {
+    sessionStorage.setItem('auth_ok', '1');
+    showDashboard();
   } else {
     document.getElementById('auth-error').style.display = 'block';
+    document.getElementById('password-input').value = '';
+    document.getElementById('password-input').focus();
   }
 }
 
-function showDashboard(email, name) {
+function showDashboard() {
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('app').style.display = 'block';
-  document.getElementById('user-info').textContent = name || email;
   initDashboard();
 }
 
 // Check existing session on load
 window.addEventListener('load', () => {
-  const email = sessionStorage.getItem('auth_email');
-  const name  = sessionStorage.getItem('auth_name');
-  if (email) showDashboard(email, name);
+  if (sessionStorage.getItem('auth_ok')) showDashboard();
 });
 
 // ── CONSTANTS ─────────────────────────────────────────────────────
