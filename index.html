@@ -36,6 +36,11 @@
     #auth-box .logo { font-size: 40px; margin-bottom: 8px; }
     #auth-box h2 { font-size: 18px; font-weight: 700; color: var(--mp-dark); margin-bottom: 6px; }
     #auth-box p  { font-size: 13px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+    .check-list { display:flex; flex-direction:column; gap:2px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:6px 8px; }
+    .check-list label { display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer; padding:3px 5px; border-radius:4px; white-space:nowrap; }
+    .check-list label:hover { background:var(--bg); }
+    .check-list input[type="checkbox"] { cursor:pointer; accent-color:var(--mp-blue); width:13px; height:13px; }
+
     #auth-box input[type="password"] {
       width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
       border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 12px;
@@ -148,16 +153,13 @@
 <div class="filters">
   <div class="fg">
     <label>Sellers</label>
-    <div>
-      <select id="fSeller" multiple size="6">
-        <option value="all" selected>Todos los sellers</option>
-        <option value="189499394">189499394</option>
-        <option value="1275421774">1275421774</option>
-        <option value="137731870">137731870</option>
-        <option value="99467373">99467373</option>
-        <option value="434342240">434342240</option>
-      </select>
-      <div class="hint">Click para toggle · múltiple sin Ctrl</div>
+    <div class="check-list">
+      <label><input type="checkbox" id="sellerAll" checked onchange="handleSellerCheck(this)"> Todos</label>
+      <label><input type="checkbox" class="seller-cb" value="189499394" onchange="handleSellerCheck(this)"> 189499394</label>
+      <label><input type="checkbox" class="seller-cb" value="1275421774" onchange="handleSellerCheck(this)"> 1275421774</label>
+      <label><input type="checkbox" class="seller-cb" value="137731870" onchange="handleSellerCheck(this)"> 137731870</label>
+      <label><input type="checkbox" class="seller-cb" value="99467373" onchange="handleSellerCheck(this)"> 99467373</label>
+      <label><input type="checkbox" class="seller-cb" value="434342240" onchange="handleSellerCheck(this)"> 434342240</label>
     </div>
   </div>
   <div class="fg" style="align-self:center">
@@ -322,28 +324,30 @@ function initDashboard() {
   RAW = window.BQ_DATA ? window.BQ_DATA : generateData();
   document.getElementById('last-updated').textContent =
     window.BQ_DATA ? `Datos BQ: ${window.BQ_UPDATED||'—'}` : 'Datos: Mock (pendiente primera corrida)';
-  document.getElementById('fSeller').addEventListener('mousedown',function(e){
-    if(e.target.tagName!=='OPTION')return;
-    e.preventDefault();
-    const opt=e.target,allOpt=this.querySelector('option[value="all"]');
-    const specOpts=Array.from(this.querySelectorAll('option:not([value="all"])'));
-    if(opt.value==='all'){specOpts.forEach(o=>o.selected=false);allOpt.selected=true;}
-    else{allOpt.selected=false;opt.selected=!opt.selected;if(!specOpts.some(o=>o.selected))allOpt.selected=true;}
-    refresh();
-  });
   renderP0();
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────
-function gk(r){return gran==='day'?r.date:r.week;}
+function handleSellerCheck(cb) {
+  if (cb.id === 'sellerAll') {
+    document.querySelectorAll('.seller-cb').forEach(c => c.checked = false);
+    cb.checked = true;
+  } else {
+    document.getElementById('sellerAll').checked = false;
+    if (!Array.from(document.querySelectorAll('.seller-cb')).some(c => c.checked))
+      document.getElementById('sellerAll').checked = true;
+  }
+  refresh();
+}
+function gk(r){return gran==='day'?r.date:(r.week||isoWeek(r.date));}
 function sum(arr,f){return arr.reduce((s,r)=>s+(r[f]||0),0);}
 function uniq(arr){return[...new Set(arr)].sort();}
 function filter(){
-  const selEl=document.getElementById('fSeller');
-  const selVals=Array.from(selEl.selectedOptions).map(o=>o.value);
+  const allCb=document.getElementById('sellerAll');
+  const showAll=!allCb||allCb.checked;
+  const selVals=showAll?[]:Array.from(document.querySelectorAll('.seller-cb:checked')).map(cb=>cb.value);
   const dev=document.getElementById('fDevice').value;
-  const showAll=selVals.length===0||selVals.includes('all');
-  return RAW.filter(r=>(showAll||selVals.includes(r.seller))&&(dev==='all'||r.device===dev));
+  return RAW.filter(r=>r.date&&(showAll||selVals.includes(r.seller))&&(dev==='all'||r.device===dev));
 }
 function prepost(data){return{pre:data.filter(r=>r.date<PILOT_START),post:data.filter(r=>r.date>=PILOT_START)};}
 function keys(data){return uniq(data.map(gk));}
@@ -401,9 +405,7 @@ function renderP0(){
   const tpvByK=groupSum(data,gk,'pf_approved_amt'),flByK=groupSum(data,gk,'qty_flows'),plg=pilotPlugin(ks);
   dstr('c0a')(new Chart(document.getElementById('c0a'),{type:'bar',data:{labels:ks,datasets:[{label:'TPV Aprobado (USD)',data:ks.map(k=>tpvByK[k]||0),backgroundColor:'rgba(0,158,227,.7)',borderColor:'#009EE3',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+v.toLocaleString()}}}},plugins:[plg]}));
   dstr('c0b')(new Chart(document.getElementById('c0b'),{type:'bar',data:{labels:ks,datasets:[{label:'Flows',data:ks.map(k=>flByK[k]||0),backgroundColor:'rgba(255,179,0,.7)',borderColor:'#FFB300',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}},plugins:[plg]}));
-  const preTPVw=sum(pre,'pf_approved_amt')/preWks,postTPVw=sum(post,'pf_approved_amt')/postWks;
-  const preFlw=sum(pre,'qty_flows')/preWks,postFlw=sum(post,'qty_flows')/postWks;
-  document.getElementById('t0').innerHTML=buildTable(['Métrica','Pre-piloto (16/03–12/04)','Post-piloto (desde 13/04)','Lift'],[['TPV diario promedio (USD)',fmtUSD(preTPVd),fmtUSD(postTPVd),liftPct(postTPVd,preTPVd)],['TPV semanal promedio (USD)',fmtUSD(preTPVw),fmtUSD(postTPVw),liftPct(postTPVw,preTPVw)],['Flows diarios promedio',fmtNum(preFld),fmtNum(postFld),liftPct(postFld,preFld)],['Flows semanales promedio',fmtNum(preFlw),fmtNum(postFlw),liftPct(postFlw,preFlw)],['Aprobación %',fmtPct(preApp),fmtPct(postApp),liftPP(postApp-preApp)],['Conversión %',fmtPct(preConv),fmtPct(postConv),liftPP(postConv-preConv)],['% BNPL',fmtPct(preBNPL,2),fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL)],['% Logged',fmtPct(preLog),fmtPct(postLog),liftPP(postLog-preLog)]]);
+  document.getElementById('t0').innerHTML=buildTable(['Métrica','Pre-piloto (16/03–12/04)','Post-piloto (desde 13/04)','Lift'],[['TPV diario promedio (USD)',fmtUSD(preTPVd),fmtUSD(postTPVd),liftPct(postTPVd,preTPVd)],['Flows diarios promedio',fmtNum(preFld),fmtNum(postFld),liftPct(postFld,preFld)],['Aprobación %',fmtPct(preApp),fmtPct(postApp),liftPP(postApp-preApp)],['Conversión %',fmtPct(preConv),fmtPct(postConv),liftPP(postConv-preConv)],['% BNPL',fmtPct(preBNPL,2),fmtPct(postBNPL,2),liftPP(postBNPL-preBNPL)],['% Logged',fmtPct(preLog),fmtPct(postLog),liftPP(postLog-preLog)]]);
 }
 
 // ── PAGE 1 ────────────────────────────────────────────────────────
@@ -441,10 +443,10 @@ function renderP3(){
   const data=filter(),{pre,post}=prepost(data),ks=keys(data),plg=pilotPlugin(ks);
   const appByK={};ks.forEach(k=>appByK[k]={inc:0,app:0});
   data.forEach(r=>{const k=gk(r);appByK[k].inc+=r.pf_incoming_amt;appByK[k].app+=r.pf_approved_amt;});
-  dstr('c3a')(new Chart(document.getElementById('c3a'),{type:'line',data:{labels:ks,datasets:[{label:'Aprobación %',data:ks.map(k=>appByK[k].inc?(appByK[k].app/appByK[k].inc*100).toFixed(1):null),borderColor:'#009EE3',backgroundColor:'rgba(0,158,227,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  dstr('c3a')(new Chart(document.getElementById('c3a'),{type:'line',data:{labels:ks,datasets:[{label:'Aprobación %',data:ks.map(k=>appByK[k].inc?+(appByK[k].app/appByK[k].inc*100).toFixed(1):null),borderColor:'#009EE3',backgroundColor:'rgba(0,158,227,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
   const convByK={};ks.forEach(k=>convByK[k]={fl:0,cg:0});
   data.forEach(r=>{const k=gk(r);convByK[k].fl+=r.qty_flows;convByK[k].cg+=r.qty_congrats;});
-  dstr('c3b')(new Chart(document.getElementById('c3b'),{type:'line',data:{labels:ks,datasets:[{label:'Conversión %',data:ks.map(k=>convByK[k].fl?(convByK[k].cg/convByK[k].fl*100).toFixed(1):null),borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
+  dstr('c3b')(new Chart(document.getElementById('c3b'),{type:'line',data:{labels:ks,datasets:[{label:'Conversión %',data:ks.map(k=>convByK[k].fl?+(convByK[k].cg/convByK[k].fl*100).toFixed(1):null),borderColor:'#00A650',backgroundColor:'rgba(0,166,80,.1)',fill:true,tension:.3,pointRadius:3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}},plugins:[plg]}));
   const allFFs=uniq(data.map(r=>r.finish_flow)),ffByK={};
   ks.forEach(k=>{ffByK[k]={};allFFs.forEach(ff=>ffByK[k][ff]=0);});
   data.forEach(r=>{const k=gk(r);ffByK[k][r.finish_flow]=(ffByK[k][r.finish_flow]||0)+r.qty_flows;});
